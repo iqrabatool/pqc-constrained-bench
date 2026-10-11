@@ -22,7 +22,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 
 PQ, CL = "#2a78d6", "#eb6834"
 FRAME_PAYLOAD = 100   # usable bytes per IEEE 802.15.4 frame (127-byte PHY payload minus typical headers)
-LORA_PAYLOAD = 51     # LoRaWAN maximum application payload at the slowest US915/EU868 data rates
+LORA_PAYLOAD = 51     # LoRaWAN maximum application payload at EU868 data rates DR0-DR2 (LoRaWAN Regional Parameters)
 
 
 def load(prefix):
@@ -94,6 +94,8 @@ def main():
     ap.add_argument("--repo", default="[code and data repository URL]")
     ap.add_argument("--out", default="PQC_Constrained_Devices_Report.pdf")
     ap.add_argument("--watermark", default="")
+    ap.add_argument("--ack", default="", help="acknowledgment text, e.g. disclosure of AI assistance")
+    ap.add_argument("--baseline-only", action="store_true", help="use when no constrained device was measured (e.g., laptop or Colab only)")
     a = ap.parse_args()
     assert len(a.runs) == len(a.names), "give one --names entry per --runs entry"
     runs = [load(p) for p in a.runs]
@@ -106,8 +108,11 @@ def main():
     h2 = ParagraphStyle("h2", parent=ss["Heading2"], fontName="Helvetica-Bold", fontSize=11.5, spaceBefore=8, spaceAfter=4, textColor=colors.HexColor("#1d3557"))
     small = ParagraphStyle("s", parent=body, fontSize=8.5, leading=11, textColor=colors.HexColor("#444444"))
     S = []
-    S += [Paragraph("Cost of NIST Post-Quantum Cryptography on Constrained Wireless Devices: Measurements of ML-KEM and ML-DSA Against Classical Baselines", h1),
-          Paragraph(f"{a.author}<br/>{a.affil}<br/>Technical report, measurements taken {', '.join(d['timestamp_utc'][:10] for _, d in runs)}", small), Spacer(1, 8)]
+    baseline_only = a.baseline_only
+    title = ("Post-Quantum Cryptography Costs for Wireless and IoT Systems: Baseline Measurements of ML-KEM and ML-DSA Against Classical Algorithms"
+             if baseline_only else "Cost of NIST Post-Quantum Cryptography on Constrained Wireless Devices: Measurements of ML-KEM and ML-DSA Against Classical Baselines")
+    S += [Paragraph(title, h1),
+          Paragraph(f"{a.author}<br/>{a.affil}<br/>Technical report, measurements taken {', '.join(d['timestamp_utc'][:10] for _, d in runs)} (UTC)", small), Spacer(1, 8)]
 
     base_rows = runs[-1][0]; con_rows = runs[0][0]
     bm = {(r["algorithm"], r["operation"]): r["median_us"] for r in base_rows}
@@ -120,18 +125,20 @@ def main():
                 f", against classical X25519, ECDSA P-256, and Ed25519. On {a.names[0]}, an ML-KEM-768 encapsulation took {g('ML-KEM-768','encaps'):.0f} microseconds "
                 f"and an ML-DSA-65 signature took {g('ML-DSA-65','sign'):.0f} microseconds. Message size is the larger burden: one ML-KEM-768 exchange sends "
                 f"{w['ML-KEM-768']:,} bytes versus {w['X25519']} for X25519, and an ML-DSA-65 public key plus signature is {w['ML-DSA-65']:,} bytes versus {w['Ed25519']} for Ed25519. "
-                f"Code and raw data are available at {a.repo}.")
+                + (" Timing was measured on a general-purpose platform as a reproducible baseline. Key, ciphertext, and signature sizes are identical on every platform, so the size results and their consequences for low-power wireless links apply directly to constrained devices; timing on constrained hardware is the next stage of this work. " if baseline_only else " ")
+                + f"Code and raw data are available at {a.repo}.")
     S += [Paragraph("<b>Abstract.</b> " + abstract, body)]
 
     S += [Paragraph("1. Motivation", h2), Paragraph(
-        "Executive Order 14412 (June 22, 2026) directs federal high-value systems to adopt post-quantum key establishment by December 31, 2030 and post-quantum signatures by December 31, 2031, "
+        "Executive Order 14412 (June 22, 2026) directs agencies to move federal high value assets and high-impact systems to post-quantum key establishment by December 31, 2030 and post-quantum signatures by December 31, 2031, "
         "and directs assistance to critical-infrastructure operators making the same transition. Constrained wireless devices, such as sensors, radios, and gateways with limited energy, memory, and airtime, "
-        "are the hardest part of that migration. This report provides reproducible measurements as a first step toward an open benchmark and integration guide for such devices.", body)]
+        "are the hardest part of that migration. This report provides reproducible " + ("baseline " if baseline_only else "") + "measurements as a first step toward an open benchmark and integration guide for such devices.", body)]
 
     S += [Paragraph("2. Setup", h2)]
     rows = [["Device", "Board / CPU", "Arch", "Cores", "RAM (MB)", "liboqs", "Python", "Runs per op"]]
     for (rws, d), nm in zip(runs, a.names):
-        rows.append([nm, d.get("board_model", d.get("processor", "")) or "", d.get("machine", ""), str(d.get("cpu_count", "")),
+        cpu = d.get("board_model") or (f"{d.get('cpu_freq_MHz')} MHz CPU" if d.get("cpu_freq_MHz") else d.get("processor", ""))
+        rows.append([nm, cpu, d.get("machine", ""), str(d.get("cpu_count", "")),
                      str(d.get("ram_total_MB", "")), d.get("liboqs_version", ""), d.get("python", ""), rws[0]["runs"]])
     S += [tbl(rows, [1.2*inch, 1.6*inch, 0.6*inch, 0.45*inch, 0.6*inch, 0.6*inch, 0.6*inch, 0.65*inch]), Spacer(1, 4),
           Paragraph("Each operation was run the stated number of times after 20 warm-up runs; medians and 95th percentiles are reported. ML-KEM and ML-DSA use liboqs through liboqs-python; "
@@ -149,11 +156,11 @@ def main():
     S += [Paragraph("Figure 2. Bytes exchanged per key establishment or per signed message.", small), Image(os.path.join(tmp, "b.png"), width=6.6*inch, height=2.93*inch)]
 
     S += [Paragraph("4. What this means for wireless devices", h2)]
-    imp = [["Exchange", "Bytes", f"802.15.4 frames (~{FRAME_PAYLOAD} B each)", f"LoRaWAN packets ({LORA_PAYLOAD} B max)"]]
+    imp = [["Exchange", "Bytes", f"802.15.4 frames (~{FRAME_PAYLOAD} B each)", f"LoRaWAN packets (EU868 DR0-DR2, {LORA_PAYLOAD} B max)"]]
     for alg in ["X25519", "ML-KEM-512", "ML-KEM-768", "ML-KEM-1024", "Ed25519", "ECDSA-P256", "ML-DSA-44", "ML-DSA-65", "ML-DSA-87"]:
         if alg in w: imp.append([alg, f"{w[alg]:,}", str(math.ceil(w[alg] / FRAME_PAYLOAD)), str(math.ceil(w[alg] / LORA_PAYLOAD))])
     S += [tbl(imp, [1.3*inch, 0.9*inch, 1.9*inch, 1.9*inch]), Spacer(1, 4), Paragraph(
-        "Frame counts are illustrative: they divide the bytes by a typical usable payload and ignore fragmentation headers, retransmissions, and certificate chains, all of which add more. "
+        "ECDSA signatures in DER encoding vary between about 70 and 72 bytes; the measured value is shown. Frame counts are illustrative: they divide the bytes by a typical usable payload and ignore fragmentation headers, retransmissions, and certificate chains, all of which add more. "
         "Even so, they show the central problem: on low-power links, post-quantum protection multiplies the number of transmissions, and each transmission costs energy and airtime. "
         "On a fast processor computation is minor; on constrained links the bytes dominate. This is why device-specific measurement, gateway-side handling, and security-aware scheduling are needed.", body)]
 
@@ -164,6 +171,8 @@ def main():
         "Next steps are measurements on microcontroller-class boards (for example with the pqm4 framework), energy measurement per operation, hybrid key exchange in a full protocol handshake, "
         "signed firmware updates over constrained links, and use of the measured costs in security-aware resource allocation.", body)]
     S += [Paragraph("Data availability", h2), Paragraph(f"Benchmark script, raw CSV results, and device descriptions: {a.repo}", body)]
+    if a.ack:
+        S += [Paragraph("Acknowledgment", h2), Paragraph(a.ack, body)]
 
     def deco(c, doc):
         c.saveState(); c.setFont("Helvetica", 7.5); c.setFillGray(0.4)

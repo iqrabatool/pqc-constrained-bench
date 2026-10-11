@@ -9,7 +9,7 @@ Reproducible measurements of NIST post-quantum cryptography (ML-KEM, FIPS 203; M
 |---|---|
 | `pqc_bench.py` | Benchmark script: times key generation, encapsulation/decapsulation and signing/verification at every standardized parameter set, and records key, ciphertext and signature sizes |
 | `make_report.py` | Builds the technical report PDF from the benchmark output |
-| `colab.csv` | Raw results, Google Colab cloud VM, 1,000 runs per operation (October 11, 2026, UTC) |
+| `colab.csv` | Raw results, Google Colab cloud VM, 1,000 runs per operation (October 11, 2026, UTC; October 10 local time) |
 | `colab_device.json` | Hardware and software description of the platform that produced `colab.csv` |
 | `Batool_PQC_Report.pdf` | Technical report |
 
@@ -25,3 +25,6 @@ python3 make_report.py --runs mydevice --names "My device" --baseline-only --out
 
 ## Next steps
 Timing and energy measurements on constrained hardware (single-board computers and microcontrollers), full hybrid handshakes, and signed firmware updates over low-power links.
+
+## Acknowledgment
+The benchmark and report-generation scripts were developed with the assistance of an AI tool (Claude, Anthropic). The author ran all measurements, reviewed the code and results, and is responsible for the content.
