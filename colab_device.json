@@ -1,0 +1,12 @@
+{
+  "python": "3.13.16",
+  "platform": "Linux-6.6.122+-x86_64-with-glibc2.39",
+  "machine": "x86_64",
+  "processor": "x86_64",
+  "liboqs_version": "0.16.0",
+  "liboqs_python_version": "0.16.0.1",
+  "timestamp_utc": "2026-10-11T02:48:55Z",
+  "cpu_count": 2,
+  "ram_total_MB": 12976,
+  "cpu_freq_MHz": 2200
+}
